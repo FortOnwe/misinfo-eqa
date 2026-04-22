@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "misinfo-eqa"
+version = "0.1.0"
+description = "Evaluation quality assurance harness for misinformation datasets."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Fortune Nwachukwu Onwe", email = "f.onwe-2025@hull.ac.uk" }]
+license = { text = "MIT" }
+keywords = [
+  "misinformation",
+  "evaluation",
+  "dataset-quality",
+  "fact-checking",
+  "benchmarking",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Text Processing :: Linguistic",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/FortOnwe/misinfo-eqa"
+Repository = "https://github.com/FortOnwe/misinfo-eqa"
+LinkedIn = "https://www.linkedin.com/in/fortune-onwe/"
+
+[project.optional-dependencies]
+full = [
+  "datasets>=2.19",
+  "pandas>=2.0",
+  "pyarrow>=15",
+  "scikit-learn>=1.4",
+  "pyyaml>=6.0",
+]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+misinfo-eqa = "misinfo_eqa.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["misinfo_eqa*"]

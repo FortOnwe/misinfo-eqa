@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use MisinfoEQA, please cite this software artifact."
+title: "MisinfoEQA: Misinformation Evaluation Stress Test"
+version: "0.1.0"
+date-released: "2026-04-22"
+license: MIT
+authors:
+  - family-names: "Onwe"
+    given-names: "Fortune Nwachukwu"
+    email: "f.onwe-2025@hull.ac.uk"
+    affiliation: "University of Hull"
+    website: "https://github.com/FortOnwe"
+repository-code: "https://github.com/FortOnwe/misinfo-eqa"
+url: "https://github.com/FortOnwe/misinfo-eqa"
+keywords:
+  - misinformation
+  - dataset quality
+  - evaluation
+  - fact checking
+  - benchmark QA
+abstract: >-
+  MisinfoEQA is a lightweight evaluation quality assurance harness for
+  misinformation datasets. It normalizes public or local datasets, runs
+  lightweight baselines, applies shortcut, evidence, ambiguity, temporal, and
+  label-rationale stressors, and generates reports plus manual audit sheets.

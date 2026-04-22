@@ -1,0 +1,12 @@
+run_dir: runs
+max_examples_per_dataset: 50
+seed: 7
+api_judge: false
+bootstrap_samples: 50
+label_space: [true, false, unknown]
+
+datasets:
+  - name: demo
+    source: local
+    path: ../examples/demo.csv
+

@@ -1,0 +1,29 @@
+run_dir: runs
+max_examples_per_dataset: 200
+seed: 42
+api_judge: false
+bootstrap_samples: 100
+label_space: [true, false, unknown]
+
+datasets:
+  - name: fever
+    source: huggingface
+    hf_name: ComplexDataLab/Misinfo_Datasets
+    subset: fever
+    splits: [train, validation, test]
+  - name: climate_fever
+    source: huggingface
+    hf_name: ComplexDataLab/Misinfo_Datasets
+    subset: climate_fever
+    splits: [train, validation, test]
+  - name: pubhealthtab
+    source: huggingface
+    hf_name: ComplexDataLab/Misinfo_Datasets
+    subset: pubhealthtab
+    splits: [train, validation, test]
+  - name: snopes
+    source: huggingface
+    hf_name: ComplexDataLab/Misinfo_Datasets
+    subset: snopes
+    splits: [train, validation, test]
+

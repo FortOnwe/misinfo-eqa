@@ -1,0 +1,19 @@
+id,split,claim,evidence,veracity,date,source_url
+1,train,Official health agency confirmed the vaccine schedule is accurate,Official records verify the schedule and show the claim is accurate,true,2021-01-05,https://example.test/1
+2,train,Viral post says lemon water cures the disease,Fact checkers debunked the treatment claim and called it false,false,2021-02-10,https://example.test/2
+3,train,Reportedly disputed claim about masks remains unverified,Available evidence is mixed and uncertain,unknown,2021-03-12,https://example.test/3
+4,train,Official statistics confirmed the hospital count,Government statistics confirmed the number,true,2021-04-13,https://example.test/4
+5,train,Viral hoax says the invented medicine works overnight,Medical reviewers debunked this misleading false claim,false,2021-05-09,https://example.test/5
+6,train,Unconfirmed report claims a new outbreak source,Available evidence is unclear and unverified,unknown,2021-06-18,https://example.test/6
+7,train,Official report verified the food safety recall,The agency confirmed the recall details,true,2021-07-20,https://example.test/7
+8,train,Fake post says wireless towers caused the illness,Researchers found no evidence and fact checkers called it false,false,2021-08-21,https://example.test/8
+9,train,Reportedly disputed claim about travel bans remains unclear,The evidence remains mixed and uncertain,unknown,2021-09-25,https://example.test/9
+10,train,Official court record confirmed the policy date,Court records verify the date,true,2021-10-02,https://example.test/10
+11,train,Viral hoax claims the photo proves election fraud,The photo was debunked as misleading and false,false,2021-11-11,https://example.test/11
+12,train,Unverified social post claims shortages are planned,Available evidence is uncertain,unknown,2021-12-03,https://example.test/12
+13,test,Official evidence confirmed the public health number,Official evidence shows the number is accurate,true,2022-01-05,https://example.test/13
+14,test,Viral hoax says a household cleaner cures infection,Medical reviewers debunked the false treatment claim,false,2022-02-15,https://example.test/14
+15,test,Reportedly disputed claim about clinics remains unverified,The available evidence is mixed,unknown,2022-03-17,https://example.test/15
+16,test,Official agency confirmed the inspection result,Agency documents verify the result,true,2022-04-09,https://example.test/16
+17,test,Fake post says the video shows a recent event,Fact checkers found the video was old and misleading,false,2022-05-19,https://example.test/17
+18,test,Unconfirmed claim about supply changes remains unclear,The evidence is uncertain and incomplete,unknown,2022-06-22,https://example.test/18

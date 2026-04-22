@@ -1,0 +1,322 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+\urlstyle{same}
+\setlist[itemize]{leftmargin=*}
+\setlist[enumerate]{leftmargin=*}
+
+\title{MisinfoEQA: Stress-Testing Evidence Quality and Evaluation Fragility in Misinformation Benchmarks}
+\author{
+Fortune Nwachukwu Onwe\\
+MSc Artificial Intelligence and Data Science\\
+University of Hull, United Kingdom\\
+\href{mailto:f.onwe-2025@hull.ac.uk}{f.onwe-2025@hull.ac.uk}\\
+\href{mailto:fortonwe@gmail.com}{fortonwe@gmail.com}\\
+\href{https://www.linkedin.com/in/fortune-onwe/}{linkedin.com/in/fortune-onwe}\\
+\href{https://github.com/FortOnwe}{github.com/FortOnwe}\\
+\href{https://github.com/FortOnwe/misinfo-eqa}{github.com/FortOnwe/misinfo-eqa}
+}
+\date{April 22, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Misinformation datasets are often evaluated as if labels, evidence, and splits
+are directly comparable across sources. In practice, evidence fields may contain
+natural-language rationales, structured references, long fact-checking articles,
+or no usable evidence at all. We present MisinfoEQA, a lightweight evaluation
+quality assurance harness that normalizes misinformation datasets, separates raw
+evidence availability from natural-language evidence usability, runs simple
+interpretable baselines, applies stress tests, and produces manual-audit sheets.
+On four subsets from \texttt{ComplexDataLab/Misinfo\_Datasets} with 1,000
+examples per dataset, MisinfoEQA finds that Climate-FEVER has high
+natural-language evidence coverage but claim-plus-evidence underperforms
+claim-only by 0.109 macro-F1, and manual audit confirms 76.0\% precision among
+reviewed Climate-FEVER evidence flags. FEVER has 88.2\% raw evidence coverage
+but 0.0\% natural-language evidence coverage in this normalized source, because
+the evidence is mostly structured reference metadata. PubHealthTab has no usable
+evidence in the sampled records. Snopes has complete natural-language evidence
+coverage but low audit precision for simple evidence heuristics, showing that
+long-form fact-checking narratives need richer semantic or article-structure-aware
+QA. These results support a simple conclusion: evidence availability is not
+evidence usability, and misinformation benchmark reports should include
+dataset-QA diagnostics alongside model scores.
+\end{abstract}
+
+\section{Introduction}
+
+Recent work on misinformation evaluation has expanded from static fact-checking
+classification to richer concerns such as dataset quality, LLM resilience,
+temporal generalization, and contamination resistance. A broad guide to
+misinformation detection data and evaluation curated a large unified collection
+and highlighted quality concerns such as keyword shortcuts, temporal artifacts,
+and feasibility of verification \cite{thibault2025guide,complexdatalab2025misinfo}.
+Adjacent benchmark work such as MisinfoBench \cite{yang2025misinfobench} and
+TripleFact \cite{xu2025triplefact} targets LLM resilience and contamination
+risks.
+
+MisinfoEQA is complementary. It does not introduce a new LLM benchmark or a new
+misinformation generation task. Instead, it asks whether a dataset is safe to
+evaluate in the way a practitioner might be tempted to evaluate it. Are labels
+mapped consistently? Does the evidence field contain natural-language evidence
+or only IDs? Does adding evidence improve or hurt a lightweight classifier? Do
+model rankings change on ambiguous slices? Do heuristic rationale flags survive
+manual audit?
+
+The contribution is a standalone command-line harness and an MVP validation
+study. The tool:
+
+\begin{enumerate}
+  \item normalizes public or local datasets into a shared schema;
+  \item distinguishes raw evidence coverage from natural-language evidence coverage;
+  \item runs dependency-light baselines and stressors;
+  \item generates Markdown/HTML reports, plots, and JSON artifacts;
+  \item creates audit sheets and summarizes reviewer verdicts.
+\end{enumerate}
+
+The empirical claim is deliberately modest but useful: simple QA checks surface
+actionable differences between datasets before expensive model evaluation.
+
+\section{Related Work}
+
+FEVER introduced a large-scale claim verification benchmark with claims labeled
+as supported, refuted, or not enough information, and evidence annotations for
+supported and refuted claims \cite{thorne2018fever}. Climate-FEVER adapted
+FEVER-style verification to real-world climate claims and emphasized the
+subtlety of modeling climate claims with evidence \cite{diggelmann2020climatefever}.
+The ComplexDataLab misinformation collection unifies many misinformation
+datasets and harmonizes labels into true, false, and unknown categories
+\cite{thibault2025guide,complexdatalab2025misinfo}.
+
+Recent benchmark work has broadened the evaluation target. MisinfoBench
+evaluates LLM resilience to misinformation across dimensions such as
+discernment, resistance, and principled refusal \cite{yang2025misinfobench}.
+TripleFact focuses on benchmark contamination and proposes dynamic and
+controlled evaluation components for LLM-driven fake news detection
+\cite{xu2025triplefact}. MisinfoEQA differs by placing the dataset itself under
+test. It is designed to run before, or alongside, model benchmarking.
+
+\section{System Design}
+
+\subsection{Normalized Schema}
+
+Every record is coerced into:
+
+\begin{quote}
+\texttt{id, dataset, split, claim, evidence\_text, label3, date, source\_url, metadata}
+\end{quote}
+
+\texttt{label3} is restricted to \texttt{true}, \texttt{false}, and
+\texttt{unknown}. Dataset-specific fields are preserved in \texttt{metadata}
+when they are not mapped into the common schema.
+
+\subsection{Evidence Typing}
+
+MisinfoEQA reports two evidence notions: raw evidence coverage, where any
+evidence-like value is present, and natural-language evidence coverage, where
+the value appears to be usable text. This distinction prevents structured tuples
+such as FEVER evidence references from being treated as ordinary evidence text.
+
+\subsection{Baselines}
+
+The MVP uses lightweight baselines: a majority-class classifier; hashed TF-IDF
+plus softmax logistic regression on claim text, evidence text, and claim plus
+evidence; and a heuristic NLI-style cue classifier. The TF-IDF classifier is
+dependency-free so the project can run in small environments and continuous
+integration without a heavy ML stack.
+
+\subsection{Stressors}
+
+MisinfoEQA implements five stressors: keyword shortcut masking, temporal shift
+when dates exist, evidence ablation, ambiguity slicing, and label-rationale
+mismatch checks. The label-rationale check flags missing evidence, low local
+evidence relevance, and guarded label-cue disagreements.
+
+\subsection{Manual Audit}
+
+The harness writes \texttt{audit\_sheet.csv} from flagged examples. Reviewers
+mark each row as \texttt{real\_dataset\_issue}, \texttt{evidence\_mismatch},
+\texttt{missing\_or\_weak\_evidence}, \texttt{structured\_reference\_evidence},
+\texttt{heuristic\_false\_positive}, \texttt{baseline\_limitation}, or
+\texttt{unclear}. Summary precision treats the first four labels as real issues.
+
+\section{Experimental Setup}
+
+The MVP evaluates four subsets from
+\texttt{ComplexDataLab/Misinfo\_Datasets}: \texttt{fever},
+\texttt{climate\_fever}, \texttt{pubhealthtab}, and \texttt{snopes}. The
+canonical run uses 1,000 examples per dataset, seed 42, no API judge, and 1,000
+bootstrap samples.
+
+The command sequence is:
+
+\begin{verbatim}
+python -m misinfo_eqa scan --config configs/mvp.yaml
+python -m misinfo_eqa run --config configs/mvp.yaml
+python -m misinfo_eqa audit --latest --per-dataset 25
+python -m misinfo_eqa audit-summary --latest
+\end{verbatim}
+
+The local validation run used for this paper was \texttt{runs/20260422-040519}.
+
+\section{Results}
+
+\subsection{Coverage}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Dataset & Examples & Natural-lang. evidence & Raw evidence & Date coverage \\
+\midrule
+\texttt{climate\_fever} & 1000 & 99.8\% & 100.0\% & 0.0\% \\
+\texttt{fever} & 1000 & 0.0\% & 88.2\% & 0.0\% \\
+\texttt{pubhealthtab} & 1000 & 0.0\% & 0.0\% & 0.0\% \\
+\texttt{snopes} & 1000 & 100.0\% & 100.0\% & 0.0\% \\
+\bottomrule
+\end{tabular}
+\caption{Coverage summary for the canonical MVP run.}
+\label{tab:coverage}
+\end{table}
+
+The strongest coverage finding is that raw evidence coverage can be misleading.
+FEVER has raw evidence in 88.2\% of sampled records, but those fields are
+structured references rather than natural-language evidence.
+
+\subsection{Baseline Metrics}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Dataset & Majority & Claim & Claim+Evidence & Evidence & Heuristic \\
+\midrule
+\texttt{climate\_fever} & 0.228 & 0.660 & 0.551 & 0.407 & 0.207 \\
+\texttt{fever} & 0.217 & 0.374 & 0.367 & 0.217 & 0.168 \\
+\texttt{pubhealthtab} & 0.214 & 0.391 & 0.391 & 0.214 & 0.125 \\
+\texttt{snopes} & 0.245 & 0.312 & 0.329 & 0.359 & 0.376 \\
+\bottomrule
+\end{tabular}
+\caption{Macro-F1 by lightweight baseline.}
+\label{tab:baselines}
+\end{table}
+
+The Climate-FEVER result is the clearest evidence-ablation signal: adding
+evidence reduces macro-F1 from 0.660 to 0.551. This does not prove that evidence
+is useless; rather, it shows that the evidence field and lightweight classifier
+interact poorly enough to justify closer QA.
+
+\subsection{Stressor Findings}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Dataset & Keyword drop & Evidence gain & Ambiguity Spearman & Label-rationale flags \\
+\midrule
+\texttt{climate\_fever} & 0.017 & -0.109 & 0.400 & 185/315 \\
+\texttt{fever} & 0.007 & skipped & 0.000 & skipped \\
+\texttt{pubhealthtab} & 0.004 & skipped & 0.000 & skipped \\
+\texttt{snopes} & 0.013 & 0.016 & 0.900 & 75/301 \\
+\bottomrule
+\end{tabular}
+\caption{Selected stressor outputs. Evidence gain is claim-plus-evidence macro-F1 minus claim-only macro-F1.}
+\label{tab:stressors}
+\end{table}
+
+Temporal shift was skipped for all four datasets because date coverage was
+0.0\% in the sampled normalized records.
+
+\subsection{Manual Audit}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrl}
+\toprule
+Dataset & Audited & Real issues & Precision & Verdict mix \\
+\midrule
+\texttt{climate\_fever} & 25 & 19 & 76.0\% & mismatch:8; weak:11; false positive:6 \\
+\texttt{snopes} & 25 & 4 & 16.0\% & real:2; weak:2; false positive:21 \\
+\bottomrule
+\end{tabular}
+\caption{Manual audit results for flagged examples.}
+\label{tab:audit}
+\end{table}
+
+The manual audit validates Climate-FEVER as the strongest MVP finding. It also
+reveals a limitation: the Snopes flags are mostly false positives because long
+fact-checking narratives contain background, quoted claims, and verdict language
+that simple lexical heuristics do not reliably isolate.
+
+\section{Discussion}
+
+MisinfoEQA changes the first question from ``Which model wins?'' to ``Is this
+dataset being evaluated in a way that matches its fields?'' This is useful
+because the four MVP datasets fail or stress different assumptions:
+
+\begin{itemize}
+  \item Climate-FEVER has usable-looking evidence, but evidence hurts a
+  lightweight classifier and audited flags frequently identify weak or mismatched
+  evidence.
+  \item FEVER requires resolving structured evidence references into sentence
+  text before evidence-based evaluation is meaningful.
+  \item PubHealthTab cannot support evidence-ablation or rationale checks from
+  this normalized source.
+  \item Snopes contains natural-language evidence, but long-form articles need
+  stronger span selection.
+\end{itemize}
+
+The results suggest that evaluation reports should include dataset-QA tables
+before presenting model rankings. In particular, evidence coverage should be
+reported as natural-language evidence coverage, not just non-empty evidence
+fields.
+
+\section{Limitations}
+
+The MVP uses 1,000 sampled examples per dataset, not full-dataset sweeps. It uses
+lightweight baselines, not modern neural or API judges. Temporal shift is skipped
+because the sampled records have no usable dates. Manual audit covers 50
+examples. The Snopes heuristic needs better article span extraction or semantic
+validation. Results may shift if the upstream Hugging Face collection changes.
+
+\section{Ethical Considerations}
+
+MisinfoEQA is designed to inspect existing public datasets. It does not generate
+new misinformation, retrieve live claims, or create adversarial false examples.
+Reports may include snippets from existing datasets, so users should handle
+outputs with the same care as the source data and avoid presenting flagged
+claims without context.
+
+\section{Conclusion}
+
+MisinfoEQA provides a small, reproducible harness for stress-testing
+misinformation dataset quality. The MVP shows that evidence fields vary sharply
+in usability, that evidence can hurt simple evaluation setups, and that manual
+audit is necessary to separate true dataset issues from heuristic artifacts. The
+next version should resolve structured evidence references, add stronger
+semantic rationale checks, expand manual audit, and compare light QA diagnostics
+against stronger LLM or NLI judges.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
