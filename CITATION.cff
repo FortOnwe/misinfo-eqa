@@ -2,6 +2,7 @@ cff-version: 1.2.0
 message: "If you use MisinfoEQA, please cite this software artifact."
 title: "MisinfoEQA: Misinformation Evaluation Stress Test"
 version: "0.1.0"
+doi: "10.5281/zenodo.19695104"
 date-released: "2026-04-22"
 license: MIT
 authors:

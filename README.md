@@ -1,5 +1,7 @@
 # MisinfoEQA
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19695104.svg)](https://doi.org/10.5281/zenodo.19695104)
+
 MisinfoEQA is a lightweight Evaluation Quality Assurance harness for
 misinformation datasets. It loads public or local datasets, normalizes them into
 a common schema, runs simple baselines, creates stress-test slices, and writes a
@@ -18,6 +20,7 @@ Personal email: <fortonwe@gmail.com>
 LinkedIn: <https://www.linkedin.com/in/fortune-onwe/>  
 GitHub: <https://github.com/FortOnwe>  
 Project repository: <https://github.com/FortOnwe/misinfo-eqa>
+DOI: <https://doi.org/10.5281/zenodo.19695104>
 
 ## What It Tests
 
@@ -160,6 +163,8 @@ interpret.
 - [paper/misinfoeqa_paper.md](paper/misinfoeqa_paper.md): paper-readable
   Markdown version.
 - [paper/misinfoeqa_paper.tex](paper/misinfoeqa_paper.tex): LaTeX version.
+- [paper/SUBMISSION_GUIDE.md](paper/SUBMISSION_GUIDE.md): arXiv, Zenodo, OSF,
+  and Papers with Code distribution guide.
 
 ## Safety Notes
 
