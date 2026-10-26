@@ -51,14 +51,15 @@ def _render_markdown(
     lines.append("## Dataset Coverage")
     lines.append("")
     lines.append(
-        "| Dataset | Examples | Label Counts | Natural-Language Evidence | Raw Evidence | Date Coverage |"
+        "| Dataset | Examples | Label Counts | Resolved Evidence | Raw Evidence | Evidence Statuses | Date Coverage |"
     )
-    lines.append("| --- | ---: | --- | ---: | ---: | ---: |")
+    lines.append("| --- | ---: | --- | ---: | ---: | --- | ---: |")
     for dataset, summary in sorted(data_summary["datasets"].items()):
         lines.append(
             f"| {dataset} | {summary['n']} | {_format_counts(summary['labels'])} | "
             f"{summary['evidence_coverage']:.1%} | "
             f"{summary.get('raw_evidence_coverage', summary['evidence_coverage']):.1%} | "
+            f"{_format_counts(summary.get('evidence_status', {}))} | "
             f"{summary['date_coverage']:.1%} |"
         )
     lines.append("")
@@ -101,13 +102,17 @@ def _render_markdown(
             f"after masking {keyword.get('masked_keyword_count', 0)} high-risk tokens."
         )
         if evidence.get("available", True):
+            gain_ci = evidence.get("combined_minus_claim_ci", [0.0, 0.0])
             lines.append(
                 f"- Evidence gain: {evidence.get('combined_minus_claim', 0.0):.3f} "
-                "macro-F1 for claim-plus-evidence over claim-only."
+                "macro-F1 for claim-plus-evidence over claim-only "
+                f"(95% CI [{gain_ci[0]:.3f}, {gain_ci[1]:.3f}]) using "
+                f"{evidence.get('n_supported', 0)} supported test records."
             )
         else:
             lines.append(
-                f"- Evidence ablation: skipped because {evidence.get('reason', 'unavailable')}."
+                f"- Evidence ablation: skipped because {evidence.get('reason', 'unavailable')} "
+                f"({evidence.get('n_supported', 0)} supported / {evidence.get('n_unsupported', 0)} unsupported)."
             )
         if temporal.get("available"):
             lines.append(
@@ -124,12 +129,20 @@ def _render_markdown(
             lines.append(
                 f"- Label-rationale heuristic flags: {mismatch.get('n_flagged', 0)} "
                 f"({mismatch.get('rate', 0.0):.1%} of test examples); "
-                f"{mismatch.get('examples_stored', mismatch.get('n_flagged', 0))} stored for audit."
+                f"{mismatch.get('examples_stored', mismatch.get('n_flagged', 0))} stored for audit. "
+                f"Supported vs unsupported test examples: {mismatch.get('n_supported', 0)} / {mismatch.get('n_unsupported', 0)}."
             )
         else:
             lines.append(
-                f"- Label-rationale heuristic: skipped because {mismatch.get('reason', 'unavailable')}."
+                f"- Label-rationale heuristic: skipped because {mismatch.get('reason', 'unavailable')} "
+                f"({mismatch.get('skip_reason', 'unavailable')}; "
+                f"{mismatch.get('n_supported', 0)} supported / {mismatch.get('n_unsupported', 0)} unsupported)."
             )
+        duplicate_claims = result.get("duplicate_claims", {})
+        lines.append(
+            f"- Exact duplicate claims: {duplicate_claims.get('n_exact_duplicates', 0)} "
+            f"({duplicate_claims.get('exact_duplicate_rate', 0.0):.1%})."
+        )
         lines.append("")
     lines.append("## Risk Flags")
     lines.append("")

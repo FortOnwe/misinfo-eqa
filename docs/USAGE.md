@@ -107,10 +107,44 @@ MisinfoEQA distinguishes two evidence notions:
 
 - `raw_evidence_coverage`: any evidence-like field exists.
 - `evidence_coverage`: usable natural-language evidence exists.
+- `evidence_status`: one of `resolved`, `structured_only`, `missing`,
+  `malformed`, `unavailable`.
 
 This distinction is important because some datasets store evidence as structured
 references, IDs, or tuple-like fields. Those are useful for retrieval pipelines
 but should not be treated as natural-language evidence in a text classifier.
+
+Evidence-dependent stressors skip unsupported records and report explicit
+supported/unsupported counts and skip reasons in `stressors.json` and `report.md`.
+
+### FEVER-style Structured Evidence Resolver (Optional)
+
+To resolve FEVER-like `["Page", sentence_id]` references without network calls,
+configure a local resolver:
+
+```yaml
+datasets:
+  - name: fever
+    source: huggingface
+    subset: fever
+    evidence_resolver:
+      type: fever_local
+      path: path/to/fever_index.json
+```
+
+`fever_index.json` format:
+
+```json
+{
+  "Page_Title": {
+    "0": "Sentence text",
+    "1": "Another sentence"
+  }
+}
+```
+
+If no resolver is configured (or references do not resolve), status is marked
+`unavailable` rather than counting pointers as natural-language evidence.
 
 ## Interpreting Risk Flags
 
@@ -137,4 +171,3 @@ analysis. The most useful files for portfolio or paper work are:
 - `risk_flags.json`
 - `audit_summary.md`
 - `audit_summary.json`
-

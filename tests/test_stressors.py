@@ -51,6 +51,7 @@ class StressorTests(unittest.TestCase):
             ]
         )
         self.assertTrue(flagged)
+        self.assertIn("heuristic_disagreement", flagged[0]["reasons"])
         self.assertIn("heuristic_label_disagrees:false", flagged[0]["reasons"])
 
     def test_sentence_level_relevance_avoids_long_evidence_false_positive(self):
@@ -76,6 +77,7 @@ class StressorTests(unittest.TestCase):
             ]
         )
         self.assertTrue(flagged)
+        self.assertIn("weak_evidence", flagged[0]["reasons"])
         self.assertIn("low_claim_evidence_relevance", flagged[0]["reasons"])
         self.assertLess(flagged[0]["relevance_score"], 0.18)
 
@@ -110,6 +112,21 @@ class StressorTests(unittest.TestCase):
         self.assertEqual(analysis["examples_stored"], 2)
         self.assertTrue(analysis["examples_truncated"])
         self.assertAlmostEqual(analysis["rate"], 1.0)
+
+    def test_evidence_conflict_reason_code_for_relevant_disagreement(self):
+        flagged = flag_label_rationale_mismatches(
+            [
+                ex(
+                    1,
+                    "Official report confirms the event happened.",
+                    "true",
+                    "Official report confirms this false rumor was debunked as incorrect.",
+                )
+            ]
+        )
+        self.assertTrue(flagged)
+        self.assertIn("heuristic_disagreement", flagged[0]["reasons"])
+        self.assertIn("evidence_conflict", flagged[0]["reasons"])
 
 
 if __name__ == "__main__":
