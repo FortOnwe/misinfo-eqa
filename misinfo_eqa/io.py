@@ -6,6 +6,7 @@ from pathlib import Path
 import random
 from typing import Any, Iterable
 
+from .evidence import build_evidence_resolver
 from .schema import Example, coerce_example
 
 
@@ -26,11 +27,20 @@ def load_examples(
     else:
         raise ValueError(f"Unsupported dataset source for {dataset_name}: {source}")
 
-    examples = [
-        coerce_example(row, dataset_name, idx)
-        for idx, row in enumerate(rows)
-        if isinstance(row, dict)
-    ]
+    resolver = build_evidence_resolver(dataset_cfg, config_dir=config_dir)
+    examples = []
+    for idx, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        resolution = resolver.resolve(dataset_name, row)
+        examples.append(
+            coerce_example(
+                row,
+                dataset_name,
+                idx,
+                evidence_resolution=resolution.to_dict() if resolution else None,
+            )
+        )
     examples = [example for example in examples if example.claim and example.label3]
 
     if max_examples and len(examples) > max_examples:

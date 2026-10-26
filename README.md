@@ -78,7 +78,7 @@ The pipeline also supports local CSV, JSON, and JSONL files. Local records are
 normalized into:
 
 ```text
-id, dataset, split, claim, evidence_text, label3, date, source_url, metadata
+id, dataset, split, claim, evidence_text, label3, date, source_url, metadata, evidence_status, evidence_raw
 ```
 
 Accepted `label3` values are `true`, `false`, and `unknown`.
@@ -102,6 +102,42 @@ Each run writes a timestamped directory under `runs/`:
 
 `runs/` is ignored by Git so large or sensitive local artifacts are not committed
 by accident.
+
+## Evidence Status and Resolution
+
+MisinfoEQA tracks evidence quality with explicit statuses in normalized examples:
+
+- `resolved`: usable natural-language evidence text is available.
+- `structured_only`: evidence exists but is only a structured pointer.
+- `missing`: evidence fields are empty.
+- `malformed`: evidence exists but is too short/non-linguistic for text use.
+- `unavailable`: structured evidence could not be resolved in this run.
+
+Evidence-dependent stressors use only `resolved` records and report unsupported
+counts and skip reasons when coverage is insufficient.
+
+For FEVER-style references, you can optionally add a local resolver:
+
+```yaml
+datasets:
+  - name: fever
+    source: huggingface
+    subset: fever
+    evidence_resolver:
+      type: fever_local
+      path: path/to/fever_index.json
+```
+
+The index maps page titles to sentence IDs:
+
+```json
+{
+  "Page_Title": {
+    "0": "Sentence text",
+    "1": "Another sentence"
+  }
+}
+```
 
 ## Validated MVP Result
 

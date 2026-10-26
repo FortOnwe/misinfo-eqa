@@ -9,6 +9,7 @@ from typing import Any
 from .baselines import HeuristicNliClassifier, MajorityClassifier, TfidfLogRegClassifier
 from .io import load_examples, write_json, write_jsonl
 from .metrics import (
+    bootstrap_model_delta_ci,
     bootstrap_delta_ci,
     bootstrap_metric_ci,
     classification_metrics,
@@ -116,6 +117,7 @@ def evaluate_dataset(
                     "rate": 0.0,
                 },
                 "coverage": {"test_evidence_coverage": 0.0, "test_date_coverage": 0.0},
+                "duplicate_claims": {"n_examples": 0, "n_exact_duplicates": 0, "exact_duplicate_rate": 0.0},
             },
             "risk_flags": [
                 {
@@ -128,7 +130,12 @@ def evaluate_dataset(
         }
 
     train, test = train_test_split(examples, seed=seed)
-    test_evidence_coverage = _coverage(example.evidence_text for example in test)
+    supported_evidence_indices = [
+        idx for idx, example in enumerate(test) if example.evidence_status == "resolved" and example.evidence_text
+    ]
+    test_evidence_coverage = (
+        len(supported_evidence_indices) / len(test) if test else 0.0
+    )
     test_date_coverage = _coverage(example.date for example in test)
     baseline_bundle = fit_default_baselines(train, seed=seed)
     test_texts = make_text_sets(test)
@@ -149,7 +156,14 @@ def evaluate_dataset(
         metrics[model_name] = score
 
     stressors = {
-        "evidence_ablation": _evidence_ablation(metrics, test_evidence_coverage),
+        "evidence_ablation": _evidence_ablation(
+            y_true,
+            predictions,
+            supported_evidence_indices,
+            evidence_coverage=test_evidence_coverage,
+            bootstrap_samples=bootstrap_samples,
+            seed=seed,
+        ),
         "keyword_shortcut": _keyword_shortcut(train, test, seed, bootstrap_samples),
         "temporal_shift": _temporal_shift(examples, seed, bootstrap_samples),
         "ambiguity_slice": _ambiguity_slice(test, predictions, y_true, bootstrap_samples, seed),
@@ -157,21 +171,30 @@ def evaluate_dataset(
         "coverage": {
             "test_evidence_coverage": test_evidence_coverage,
             "test_date_coverage": test_date_coverage,
+            "test_evidence_status": _evidence_status_counts(test),
         },
+        "duplicate_claims": _duplicate_claims(examples),
     }
     if test_evidence_coverage < 0.1:
         flagged_examples = []
         stressors["label_rationale_mismatch"] = {
             "available": False,
             "reason": "low_evidence_coverage",
+            "skip_reason": "insufficient_resolved_evidence",
+            "n_supported": len(supported_evidence_indices),
+            "n_unsupported": len(test) - len(supported_evidence_indices),
             "n_flagged": 0,
             "rate": 0.0,
         }
     else:
-        mismatch_analysis = analyze_label_rationale_mismatches(test, limit=100)
+        supported_examples = [test[index] for index in supported_evidence_indices]
+        mismatch_analysis = analyze_label_rationale_mismatches(supported_examples, limit=100)
         flagged_examples = mismatch_analysis["examples"]
         stressors["label_rationale_mismatch"] = {
             "available": True,
+            "skip_reason": "",
+            "n_supported": len(supported_examples),
+            "n_unsupported": len(test) - len(supported_examples),
             "n_flagged": mismatch_analysis["n_flagged"],
             "n_scanned": mismatch_analysis["n_scanned"],
             "rate": mismatch_analysis["rate"],
@@ -271,15 +294,17 @@ def train_test_split(
 
 def summarize_examples(examples: list[Example]) -> dict[str, Any]:
     labels = Counter(example.label3 for example in examples)
-    evidence_coverage = _coverage(example.evidence_text for example in examples)
+    evidence_coverage = _coverage(
+        example.evidence_text for example in examples if example.evidence_status == "resolved"
+    )
     raw_evidence_coverage = _coverage(
         example.metadata.get("raw_evidence_text", "") for example in examples
     )
     date_coverage = _coverage(example.date for example in examples)
     source_url_coverage = _coverage(example.source_url for example in examples)
-    evidence_quality = Counter(
-        str(example.metadata.get("evidence_quality", "unknown")) for example in examples
-    )
+    evidence_quality = Counter(str(example.metadata.get("evidence_quality", "unknown")) for example in examples)
+    evidence_status = Counter(example.evidence_status for example in examples)
+    duplicate_claims = _duplicate_claims(examples)
     warnings: list[str] = []
     if evidence_coverage < 0.1:
         warnings.append(
@@ -288,6 +313,10 @@ def summarize_examples(examples: list[Example]) -> dict[str, Any]:
     if raw_evidence_coverage >= 0.1 and evidence_coverage < 0.1:
         warnings.append(
             "structured_reference_evidence: raw evidence exists but is not natural-language evidence"
+        )
+    if duplicate_claims["exact_duplicate_rate"] > 0:
+        warnings.append(
+            f"duplicate_claims_present: {duplicate_claims['n_exact_duplicates']} exact duplicate claims found"
         )
     if date_coverage < 0.4:
         warnings.append("low_date_coverage: temporal-shift stressor will likely be skipped")
@@ -298,9 +327,11 @@ def summarize_examples(examples: list[Example]) -> dict[str, Any]:
         "splits": dict(Counter(example.split for example in examples)),
         "evidence_coverage": evidence_coverage,
         "raw_evidence_coverage": raw_evidence_coverage,
+        "evidence_status": dict(evidence_status),
         "evidence_quality": dict(evidence_quality),
         "date_coverage": date_coverage,
         "source_url_coverage": source_url_coverage,
+        "duplicate_claims": duplicate_claims,
         "warnings": warnings,
     }
 
@@ -312,21 +343,46 @@ def _coverage(values: Any) -> float:
     return sum(1 for value in values if value) / len(values)
 
 
-def _evidence_ablation(metrics: dict[str, Any], evidence_coverage: float = 1.0) -> dict[str, Any]:
-    claim = metrics.get("tfidf_logreg_claim", {}).get("macro_f1", 0.0)
-    evidence = metrics.get("tfidf_logreg_evidence", {}).get("macro_f1", 0.0)
-    combined = metrics.get("tfidf_logreg_claim_evidence", {}).get("macro_f1", 0.0)
-    if evidence_coverage < 0.1:
+def _evidence_ablation(
+    y_true: list[str],
+    predictions: dict[str, list[str]],
+    supported_indices: list[int],
+    *,
+    evidence_coverage: float,
+    bootstrap_samples: int,
+    seed: int,
+) -> dict[str, Any]:
+    if evidence_coverage < 0.1 or not supported_indices:
         return {
             "available": False,
-            "reason": "low_evidence_coverage",
+            "reason": "low_evidence_coverage_or_no_supported_examples",
             "evidence_coverage": evidence_coverage,
-            "claim_macro_f1": claim,
-            "evidence_macro_f1": evidence,
-            "combined_macro_f1": combined,
+            "claim_macro_f1": 0.0,
+            "evidence_macro_f1": 0.0,
+            "combined_macro_f1": 0.0,
             "combined_minus_claim": 0.0,
             "combined_minus_evidence": 0.0,
+            "combined_minus_claim_ci": [0.0, 0.0],
+            "n_supported": len(supported_indices),
+            "n_unsupported": len(y_true) - len(supported_indices),
         }
+    claim_pred = predictions.get("tfidf_logreg_claim", [])
+    evidence_pred = predictions.get("tfidf_logreg_evidence", [])
+    combined_pred = predictions.get("tfidf_logreg_claim_evidence", [])
+    slice_true = [y_true[index] for index in supported_indices]
+    claim_slice = [claim_pred[index] for index in supported_indices]
+    evidence_slice = [evidence_pred[index] for index in supported_indices]
+    combined_slice = [combined_pred[index] for index in supported_indices]
+    claim = classification_metrics(slice_true, claim_slice).get("macro_f1", 0.0)
+    evidence = classification_metrics(slice_true, evidence_slice).get("macro_f1", 0.0)
+    combined = classification_metrics(slice_true, combined_slice).get("macro_f1", 0.0)
+    gain_ci = bootstrap_model_delta_ci(
+        slice_true,
+        combined_slice,
+        claim_slice,
+        samples=bootstrap_samples,
+        seed=seed,
+    )
     return {
         "available": True,
         "evidence_coverage": evidence_coverage,
@@ -335,6 +391,9 @@ def _evidence_ablation(metrics: dict[str, Any], evidence_coverage: float = 1.0) 
         "combined_macro_f1": combined,
         "combined_minus_claim": combined - claim,
         "combined_minus_evidence": combined - evidence,
+        "combined_minus_claim_ci": gain_ci,
+        "n_supported": len(supported_indices),
+        "n_unsupported": len(y_true) - len(supported_indices),
     }
 
 
@@ -466,6 +525,7 @@ def _risk_flags(metrics: dict[str, Any], stressors: dict[str, Any]) -> list[dict
     temporal = stressors["temporal_shift"]
     ambiguity = stressors["ambiguity_slice"]
     mismatch = stressors["label_rationale_mismatch"]
+    duplicates = stressors.get("duplicate_claims", {})
     coverage = stressors.get("coverage", {})
     evidence_coverage = coverage.get("test_evidence_coverage", 0.0)
 
@@ -526,6 +586,18 @@ def _risk_flags(metrics: dict[str, Any], stressors: dict[str, Any]) -> list[dict
             }
         )
 
+    if duplicates.get("exact_duplicate_rate", 0.0) >= 0.05:
+        flags.append(
+            {
+                "risk": "duplicate_claim_risk",
+                "severity": "medium",
+                "evidence": (
+                    f"Exact duplicate claims account for {duplicates.get('exact_duplicate_rate', 0.0):.1%} "
+                    f"({duplicates.get('n_exact_duplicates', 0)} duplicates)."
+                ),
+            }
+        )
+
     if not flags:
         flags.append(
             {
@@ -539,3 +611,20 @@ def _risk_flags(metrics: dict[str, Any], stressors: dict[str, Any]) -> list[dict
 
 def _public_config(config: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in config.items() if not key.startswith("_")}
+
+
+def _evidence_status_counts(examples: list[Example]) -> dict[str, int]:
+    return dict(Counter(example.evidence_status for example in examples))
+
+
+def _duplicate_claims(examples: list[Example]) -> dict[str, Any]:
+    claims = [example.claim.strip().lower() for example in examples if example.claim.strip()]
+    if not claims:
+        return {"n_examples": 0, "n_exact_duplicates": 0, "exact_duplicate_rate": 0.0}
+    counts = Counter(claims)
+    duplicates = sum(count - 1 for count in counts.values() if count > 1)
+    return {
+        "n_examples": len(claims),
+        "n_exact_duplicates": duplicates,
+        "exact_duplicate_rate": duplicates / len(claims),
+    }

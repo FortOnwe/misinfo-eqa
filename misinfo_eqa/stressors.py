@@ -98,6 +98,7 @@ def analyze_label_rationale_mismatches(
         else:
             relevance = evidence_relevance(example.claim, evidence)
             if relevance["score"] < LOW_RELEVANCE_THRESHOLD:
+                reasons.append("weak_evidence")
                 reasons.append("low_claim_evidence_relevance")
             heuristic = classifier.predict_one(f"{example.claim} {evidence}")
             if (
@@ -105,7 +106,10 @@ def analyze_label_rationale_mismatches(
                 and heuristic != example.label3
                 and _should_flag_heuristic_disagreement(evidence, relevance)
             ):
+                reasons.append("heuristic_disagreement")
                 reasons.append(f"heuristic_label_disagrees:{heuristic}")
+                if relevance.get("score", 0.0) >= LOW_RELEVANCE_THRESHOLD:
+                    reasons.append("evidence_conflict")
         relevance = evidence_relevance(example.claim, evidence) if evidence else {}
 
         if reasons:

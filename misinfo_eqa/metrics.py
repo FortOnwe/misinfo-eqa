@@ -102,6 +102,34 @@ def bootstrap_delta_ci(
     return [values[lower_idx], values[upper_idx]]
 
 
+def bootstrap_model_delta_ci(
+    y_true: list[str],
+    y_pred_a: list[str],
+    y_pred_b: list[str],
+    *,
+    metric: str = "macro_f1",
+    samples: int = 1000,
+    seed: int = 42,
+) -> list[float]:
+    if not y_true or len(y_true) != len(y_pred_a) or len(y_true) != len(y_pred_b):
+        return [0.0, 0.0]
+    rng = random.Random(seed)
+    values: list[float] = []
+    n = len(y_true)
+    for _ in range(max(1, samples)):
+        indices = [rng.randrange(n) for _ in range(n)]
+        sampled_true = [y_true[index] for index in indices]
+        sampled_pred_a = [y_pred_a[index] for index in indices]
+        sampled_pred_b = [y_pred_b[index] for index in indices]
+        metric_a = float(classification_metrics(sampled_true, sampled_pred_a)[metric])
+        metric_b = float(classification_metrics(sampled_true, sampled_pred_b)[metric])
+        values.append(metric_a - metric_b)
+    values.sort()
+    lower_idx = min(len(values) - 1, max(0, int(0.025 * len(values))))
+    upper_idx = min(len(values) - 1, max(0, int(0.975 * len(values))))
+    return [values[lower_idx], values[upper_idx]]
+
+
 def ranking_correlations(full_scores: dict[str, float], slice_scores: dict[str, float]) -> dict[str, float]:
     common = sorted(set(full_scores) & set(slice_scores))
     if len(common) < 2:

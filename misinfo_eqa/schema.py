@@ -137,6 +137,8 @@ class Example:
     date: str
     source_url: str
     metadata: dict[str, Any]
+    evidence_status: str = "missing"
+    evidence_raw: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -171,13 +173,31 @@ def normalize_label(value: Any) -> str:
     return "unknown"
 
 
-def coerce_example(row: dict[str, Any], dataset: str, index: int) -> Example:
+EVIDENCE_STATUSES = ("resolved", "structured_only", "missing", "malformed", "unavailable")
+
+
+def coerce_example(
+    row: dict[str, Any],
+    dataset: str,
+    index: int,
+    evidence_resolution: dict[str, str] | None = None,
+) -> Example:
     split = clean_text(row.get("split")) or "unspecified"
     label = normalize_label(first_value(row, LABEL_FIELDS))
     claim = first_value(row, CLAIM_FIELDS)
     raw_evidence = clean_text(join_values(row, EVIDENCE_FIELDS))
+    evidence_status = "missing"
+    evidence_status_reason = "missing_evidence"
+    evidence = ""
+    if evidence_resolution:
+        evidence = clean_text(evidence_resolution.get("evidence_text"))
+        evidence_status = clean_text(evidence_resolution.get("status")) or evidence_status
+        evidence_status_reason = (
+            clean_text(evidence_resolution.get("reason")) or evidence_status_reason
+        )
+    if not evidence_resolution:
+        evidence_status, evidence_status_reason, evidence = _fallback_evidence_status(raw_evidence)
     evidence_quality = evidence_text_quality(raw_evidence)
-    evidence = raw_evidence if evidence_quality == "natural_language" else ""
     date = parse_date(first_value(row, DATE_FIELDS), row)
     source_url = first_value(row, URL_FIELDS)
     row_id = (
@@ -193,6 +213,8 @@ def coerce_example(row: dict[str, Any], dataset: str, index: int) -> Example:
         split=split,
         claim=clean_text(claim),
         evidence_text=clean_text(evidence),
+        evidence_status=evidence_status if evidence_status in EVIDENCE_STATUSES else "unavailable",
+        evidence_raw=raw_evidence,
         label3=label,
         date=date,
         source_url=clean_text(source_url),
@@ -200,6 +222,8 @@ def coerce_example(row: dict[str, Any], dataset: str, index: int) -> Example:
             **{k: v for k, v in row.items() if k not in {"claim", "evidence_text"}},
             "raw_evidence_text": raw_evidence,
             "evidence_quality": evidence_quality,
+            "evidence_status": evidence_status,
+            "evidence_status_reason": evidence_status_reason,
         },
     )
 
@@ -258,6 +282,17 @@ def evidence_text_quality(value: Any) -> str:
     if all_tokens and identifier_tokens / len(all_tokens) > 0.65:
         return "structured_reference"
     return "natural_language"
+
+
+def _fallback_evidence_status(raw_evidence: str) -> tuple[str, str, str]:
+    quality = evidence_text_quality(raw_evidence)
+    if quality == "missing":
+        return "missing", "missing_evidence", ""
+    if quality == "natural_language":
+        return "resolved", "native_natural_language", raw_evidence
+    if quality == "structured_reference":
+        return "structured_only", "structured_reference_without_resolution", ""
+    return "malformed", "nonlinguistic_or_too_short_evidence", ""
 
 
 def _looks_like_r_reference_vector(lowered: str) -> bool:

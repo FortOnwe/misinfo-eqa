@@ -32,6 +32,8 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(example.date, "2022-01-01")
         self.assertIn("Official evidence", example.evidence_text)
         self.assertEqual(example.metadata["evidence_quality"], "natural_language")
+        self.assertEqual(example.evidence_status, "resolved")
+        self.assertEqual(example.evidence_raw, "Official evidence shows the claim is accurate.")
 
     def test_structured_reference_evidence_is_preserved_but_not_used(self):
         example = coerce_example(
@@ -46,6 +48,38 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(example.evidence_text, "")
         self.assertEqual(example.metadata["raw_evidence_text"], "c(30098, 301119, NA, NA)")
         self.assertEqual(example.metadata["evidence_quality"], "structured_reference")
+        self.assertEqual(example.evidence_status, "structured_only")
+
+    def test_malformed_evidence_is_marked(self):
+        example = coerce_example(
+            {
+                "claim": "A claim",
+                "evidence": "123",
+                "veracity": "unknown",
+            },
+            "demo",
+            0,
+        )
+        self.assertEqual(example.evidence_status, "malformed")
+        self.assertEqual(example.evidence_text, "")
+
+    def test_unavailable_evidence_status_from_resolution(self):
+        example = coerce_example(
+            {
+                "claim": "A claim",
+                "evidence": "[['Page', 1]]",
+                "veracity": "false",
+            },
+            "fever",
+            0,
+            evidence_resolution={
+                "status": "unavailable",
+                "evidence_text": "",
+                "reason": "resolver_not_configured",
+            },
+        )
+        self.assertEqual(example.evidence_status, "unavailable")
+        self.assertEqual(example.metadata["evidence_status_reason"], "resolver_not_configured")
 
     def test_evidence_text_quality(self):
         self.assertEqual(evidence_text_quality("c(30098, NA, NA)"), "structured_reference")
